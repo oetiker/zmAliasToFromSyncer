@@ -1,0 +1,58 @@
+=head1 NAME
+
+zmaliastofromsyncer - Zimbra Alias to From Syncer
+
+=head1 SYNOPSIS
+
+B<zmaliastofromsyncer> [I<options>...] I<account@domain>|B<ALL>
+
+     --man           show man-page and exit
+ -h, --help          display this help and exit
+     --noaction      just talk don't act
+     --verbose       talk while working
+     --debug         show all output before it is parsed
+
+=head1 DESCRIPTION
+
+Make sure the zimbraPrefFromAddress matches the first zimbraMailAlias. If no
+alias is set, the script makes sure the zimbraPrefFromAddress is set to the account name or empty.
+
+=head1 EXAMPLES
+
+Configure a single account
+
+  zmaliastofromsyncer tobi@zimbra.oetiker.ch
+
+Reconfigure ALL accounts
+
+  zmmsgmover ALL
+
+=head1 COPYRIGHT
+
+Copyright (c) 2016 by OETIKER+PARTNER AG. All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+=head1 AUTHOR
+
+S<Tobias Oetiker E<lt>tobi@oetiker.chE<gt>>
+
+=head1 HISTORY
+
+ 2016-06-15 to Initial Version
+
+=cut

@@ -1,0 +1,211 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Getopt::Long 2.25 qw(:config posix_default no_ignore_case);
+use Pod::Usage 1.14;
+use IO::Handle;
+
+# main loop
+sub main(){
+    # parse options
+    my %opt = ();
+    GetOptions(\%opt, 'help|h', 'man', 'noaction|no-action|n','all','debug',
+              'verbose|v') or exit(1);
+    if ($opt{help})     { pod2usage(1) }
+    if ($opt{man})      { pod2usage(-exitstatus => 0, -verbose => 2, -noperldoc=>1) }
+    if ($opt{noaction}) {
+       $opt{verbose} = 1 ;
+       warn "*** NO ACTION MODE ***\n";
+    }
+    my $account = shift @ARGV or pod2usage(1);
+
+    my @accounts;
+    my $zm= zmProv->new(noaction=>$opt{noaction},verbose=>$opt{verbose},debug=>$opt{debug});
+    my $zmSilent= zmProv->new(noaction=>$opt{noaction},verbose=>0,debug=>$opt{debug});
+    if ($account eq 'ALL'){
+        @accounts = grep /\@/, split /\n/, $zm->cmd('gaa') ;
+    }
+    else {
+        @accounts = ($account);
+    }
+
+    if ($ENV{USER} ne 'zimbra'){
+       pod2usage(-message=>"$0 only works when running as user 'zimbra'");
+    }
+
+    for my $account (@accounts){
+        my $verbose = ">> $account <<\n";
+        my %info;
+        for my $row (split /\n/, $zmSilent->cmd("getAccount $account zimbraMailAlias zimbraPrefFromAddress")){
+            if ($row =~ /^(.+?):\s+(\S+\@\S+)/){
+                $info{$1} ||= $2;
+            }
+        };
+        for my $key (qw(zimbraMailAlias zimbraPrefFromAddress)){
+            $verbose .= "  - $key: ".($info{$key}||'*empty*')."\n" if $opt{verbose};
+        }
+        if ($info{zimbraMailAlias}) {
+            if ($info{zimbraPrefFromAddress} and $info{zimbraMailAlias} eq $info{zimbraPrefFromAddress}){
+                next;
+            }
+            print STDERR $verbose if $opt{verbose};
+            $zm->act("modifyAccount $account zimbraPrefFromAddress $info{zimbraMailAlias}");
+            next;
+        }
+        if ($info{zimbraPrefFromAddress} and $info{zimbraPrefFromAddress} ne $account){
+            print STDERR $verbose if $opt{verbose};
+            $zm->act("modifyAccount $account zimbraPrefFromAddress $account");
+        }
+    }
+}
+
+
+main;
+exit 0;
+
+package nanoExpect;
+use strict;
+use warnings;
+use IPC::Open2;
+use IO::Select;
+
+sub new {
+    my $proto = shift;
+    my $class = ref($proto)||$proto;
+
+    my $self = { @_ };
+    bless $self, $class;
+    my ($outFh, $inFh) = (IO::Handle->new(), IO::Handle->new());
+    my $pid = open2($outFh,$inFh,@{$self->{'cmd'}});
+    $outFh->blocking(0);
+    my $select = IO::Select->new($outFh);
+
+    $self->{outFh}    = $outFh;
+    $self->{inFh}     = $inFh;
+    $self->{select} = $select;
+
+    $self->cmd; #initialize
+    return $self;
+}
+
+sub printRead {
+    my $self = shift;
+    my $cmd = shift;
+    my $inFh = $self->{inFh};
+    $inFh->print($cmd."\n") if $cmd;
+    $inFh->flush();
+    my $buffer = '';
+    my $prompt = $self->{prompt};
+    while (1){
+        $self->{select}->can_read();
+        my $chunk;
+        sysread($self->{outFh},$chunk,1024);
+        $buffer .= $chunk;
+        if ($buffer =~ s/${prompt}.*?> $//){
+            last;
+        };
+    }
+    warn "ANSWER: '$buffer'\n" if $self->{debug};
+    return $buffer;
+}
+
+sub cmd {
+    my $self = shift;
+    my $cmd = shift;
+    warn "  - $cmd\n" if $self->{verbose} and $cmd;
+    $self->printRead($cmd);
+}
+
+sub act {
+    my $self = shift;
+    my $cmd = shift;
+    warn "  > $cmd\n" if $self->{verbose} and $cmd;
+    $self->printRead($cmd) unless $self->{noaction};
+}
+
+
+sub DESTROY {
+    my $self = shift;
+    my $inFh = $self->{inFh};
+    print $inFh "quit\n";
+    close $self->{inFh};
+    close $self->{outFh};
+    system "stty sane";
+}
+
+1;
+
+package zmProv;
+use strict;
+use warnings;
+use base 'nanoExpect';
+
+sub new {
+    my $class = shift;
+    my $opt = { @_ };
+    return $class->SUPER::new(cmd=>['zmprov','-l'],prompt=>'prov',verbose=>$opt->{verbose},noaction=>$opt->{noaction},debug => $opt->{debug});
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+zmaliastofromsyncer - Zimbra Alias to From Syncer
+
+=head1 SYNOPSIS
+
+B<zmaliastofromsyncer> [I<options>...] I<account@domain>|B<ALL>
+
+     --man           show man-page and exit
+ -h, --help          display this help and exit
+     --noaction      just talk don't act
+     --verbose       talk while working
+     --debug         show all output before it is parsed
+
+=head1 DESCRIPTION
+
+Make sure the zimbraPrefFromAddress matches the first zimbraMailAlias. If no
+alias is set, the script makes sure the zimbraPrefFromAddress is set to the account name or empty.
+
+=head1 EXAMPLES
+
+Configure a single account
+
+  zmaliastofromsyncer tobi@zimbra.oetiker.ch
+
+Reconfigure ALL accounts
+
+  zmmsgmover ALL
+
+=head1 COPYRIGHT
+
+Copyright (c) 2016 by OETIKER+PARTNER AG. All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+=head1 AUTHOR
+
+S<Tobias Oetiker E<lt>tobi@oetiker.chE<gt>>
+
+=head1 HISTORY
+
+ 2016-06-15 to Initial Version
+
+=cut
