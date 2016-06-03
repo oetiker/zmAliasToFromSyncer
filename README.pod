@@ -23,9 +23,9 @@ Configure a single account
 
   zmaliastofromsyncer tobi@zimbra.oetiker.ch
 
-Reconfigure ALL accounts
+Test configuration of all accounts and report the changes but don't do anything.
 
-  zmmsgmover ALL
+  zmaliastofromsyncer --noaction ALL
 
 =head1 COPYRIGHT
 
